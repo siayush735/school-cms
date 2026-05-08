@@ -1,95 +1,123 @@
 const express = require("express");
 const fs = require("fs");
+const path = require("path");
+const cors = require("cors");
 
 const app = express();
+
+app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
 
-const readDB = () =>
-  JSON.parse(fs.readFileSync("./db.json", "utf-8"));
+const dbPath = path.join(__dirname, "db.json");
 
-const writeDB = (data) =>
-  fs.writeFileSync("./db.json", JSON.stringify(data, null, 2));
+const readData = () => {
+  const raw = fs.readFileSync(dbPath, "utf-8");
+  return JSON.parse(raw);
+};
 
-// ✅ GET all content
-app.get("/content", (req, res) => {
-  const db = readDB();
-  res.json(db.content);
-});
+const writeData = (data) => {
+  fs.writeFileSync(
+    dbPath,
+    JSON.stringify(data, null, 2)
+  );
+};
 
-// ✅ GET by teacherId
-app.get("/content", (req, res) => {
-  const db = readDB();
-  const { teacherId } = req.query;
 
-  let result = db.content;
+// USERS
+app.get("/users", (req, res) => {
+  try {
+    const data = readData();
+    res.json(data.users || []);
+  } catch (err) {
+    console.log(err);
 
-  if (teacherId) {
-    result = result.filter(
-      (c) => c.teacherId == teacherId
-    );
+    res.status(500).json({
+      error: err.message,
+    });
   }
-
-  res.json(result);
 });
 
-// ✅ POST content
+
+// CONTENT
+app.get("/content", (req, res) => {
+  try {
+    const data = readData();
+
+    const { teacherId } = req.query;
+
+    if (teacherId) {
+      return res.json(
+        data.content.filter(
+          (item) => item.teacherId == teacherId
+        )
+      );
+    }
+
+    res.json(data.content || []);
+  } catch (err) {
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+});
+
+
+// POST CONTENT
 app.post("/content", (req, res) => {
-  const db = readDB();
-  const newItem = { id: Date.now().toString(), ...req.body };
+  try {
+    const data = readData();
 
-  db.content.push(newItem);
-  writeDB(db);
+    const newContent = {
+      ...req.body,
+      id: Date.now().toString(),
+    };
 
-  res.json(newItem);
-});
+    data.content.push(newContent);
 
-// ✅ PATCH update
-app.patch("/content/:id", (req, res) => {
-  const db = readDB();
+    writeData(data);
 
-  const index = db.content.findIndex(
-    (c) => c.id === req.params.id
-  );
-
-  if (index === -1) return res.status(404).send("Not found");
-
-  db.content[index] = {
-    ...db.content[index],
-    ...req.body,
-  };
-
-  writeDB(db);
-
-  res.json(db.content[index]);
-});
-
-app.get("/content", (req, res) => {
-  res.json(db.content);
-});
-
-app.patch("/content/:id", (req, res) => {
-  const db = readDB();
-
-  const index = db.content.findIndex(
-    (item) => item.id === req.params.id
-  );
-
-  if (index === -1) {
-    return res.status(404).json({ message: "Not found" });
+    res.status(201).json(newContent);
+  } catch (err) {
+    res.status(500).json({
+      error: err.message,
+    });
   }
-
-  db.content[index] = {
-    ...db.content[index],
-    ...req.body,
-  };
-
-  writeDB(db);
-
-  res.json(db.content[index]);
 });
+
+
+// PATCH CONTENT
+app.patch("/content/:id", (req, res) => {
+  try {
+    const data = readData();
+
+    const index = data.content.findIndex(
+      (item) => item.id == req.params.id
+    );
+
+    if (index === -1) {
+      return res.status(404).json({
+        message: "Not found",
+      });
+    }
+
+    data.content[index] = {
+      ...data.content[index],
+      ...req.body,
+    };
+
+    writeData(data);
+
+    res.json(data.content[index]);
+  } catch (err) {
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+});
+
 
 app.listen(PORT, () => {
-  console.log("Server running on", PORT);
+  console.log(`Server running on ${PORT}`);
 });
